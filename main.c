@@ -113,6 +113,176 @@ typedef struct dateTime {
     unsigned int second;    // [0. 59]
 } DateTime;
 
+bool CopyDigits(char* dst, const char* src, size_t start, size_t length, size_t* outPos)
+{
+    for (size_t i = 0; i < length; i++) {
+        char c = src[i + start];
+
+        if (c == '\0' || c < '0' || c > '9') {
+            return false;
+        }
+
+        dst[i] = c;
+    }
+
+    if (outPos) {
+        *outPos = start + length;
+    }
+
+    return true;
+}
+
+bool TestCopyDigits()
+{
+    printf("Testing CopyDigits()...\n");
+
+    const char* digits = "1234-5678";
+    char lhs[5] = { '\0' };
+    char rhs[5] = { '\0' };
+    char err[5] = { '\0' };
+
+    size_t pos = 0;
+
+    if (!CopyDigits(lhs, digits, pos, 4, &pos)){
+        return false;
+    }
+
+    pos++; // consume '-'
+
+    if (!CopyDigits(rhs, digits, pos, 4, &pos)) {
+        return false;
+    }
+
+    if (strcmp(lhs, "1234") != 0) {
+        return false;
+    }
+
+    if (strcmp(rhs, "5678") != 0) {
+        return false;
+    }
+
+    // Should fail if encounters non-digit
+    if (CopyDigits(err, digits, 0, 5, &pos)) {
+        return false;
+    }
+
+    // Should fail if string isn't long enough
+    if (CopyDigits(err, digits, 5, 5, &pos)) {
+        return false;
+    }
+
+    printf("lhs:%s\n", lhs);
+    printf("rhs:%s\n", rhs);
+
+    return true;
+}
+
+bool IntFromChars(unsigned int* dst, char* src, size_t n)
+{
+    if (!dst || !src) {
+        return false;
+    }
+
+    *dst = 0;
+
+    for (size_t i = 0; i < n; i++) {
+        if (src[i] == '\0' || src[i] < '0' || src['i'] > '9') {
+            return false;
+        }
+        *dst = *dst * 10 + (src[i] - '0');  // C specification guarantees 0-9 are represented by contiguous values
+    }
+
+    return true;
+}
+
+bool ExpectChar(const char* src, size_t offset, char val)
+{
+    return src[offset] == val;
+}
+
+// ISO 8601 date-time format is YYYY-MM-DDThh:mm:ssTZD
+bool PopulateDateTimeFromIsoString(const char* isoString, DateTime* dateTime)
+{
+    if (!dateTime) {
+        return false;
+    }
+
+    const size_t maxIsoLength = 25;
+    size_t seekPos = 0;
+
+    char year[4];      // Four digit year
+    char month[2];     // [1, 12]
+    char day[2];       // [1, 31]
+    char hour[2];      // [0, 23]
+    char minute[2];    // [0, 59]
+    char second[2];    // [0. 59]
+
+    // Read year
+    if (!CopyDigits(year, isoString, seekPos, 4, &seekPos)) {
+        return false;
+    }
+    IntFromChars(&(dateTime->year), year, 4);
+
+    // Consume '-'
+    if (!ExpectChar(isoString, seekPos++, '-')) {
+        return false;
+    }
+
+    // Read month
+    if (!CopyDigits(month, isoString, seekPos, 2, &seekPos)) {
+        return false;
+    }
+    IntFromChars(&(dateTime->month), month, 2);
+
+    // Consume '-'
+    if (!ExpectChar(isoString, seekPos++, '-')) {
+        return false;
+    }
+
+    // Read day
+    if (!CopyDigits(day, isoString, seekPos, 2, &seekPos)) {
+        return false;
+    }
+    IntFromChars(&(dateTime->day), day, 2);
+
+    // Consume 'T'
+    if (!ExpectChar(isoString, seekPos++, 'T')) {
+        return false;
+    }
+
+    // Read hour
+    if (!CopyDigits(hour, isoString, seekPos, 2, &seekPos)) {
+        return false;
+    }
+    IntFromChars(&(dateTime->hour), hour, 2);
+
+    // Consume ':'
+    if (!ExpectChar(isoString, seekPos++, ':')) {
+        return false;
+    }
+
+    // Read minute
+    if (!CopyDigits(minute, isoString, seekPos, 2, &seekPos)) {
+        return false;
+    }
+    IntFromChars(&(dateTime->minute), minute, 2);
+
+    // Consume ':'
+    if (!ExpectChar(isoString, seekPos++, ':')) {
+        return false;
+    }
+
+    // Read second
+    if (!CopyDigits(second, isoString, seekPos, 2, &seekPos)) {
+        return false;
+    }
+    IntFromChars(&(dateTime->second), second, 2);
+
+    // TODO: Time zone support
+
+    return true;
+}
+
 unsigned int SecondSelector(const void* dateTimeValues, size_t key)
 {
     return ((const DateTime*)dateTimeValues)[key].second;
@@ -167,7 +337,7 @@ bool TestYearSelectors()
     printf("Testing Year Selectors...\n");
 
     DateTime date;
-    date.year = 2056;
+    PopulateDateTimeFromIsoString("2056-00-00T00:00:00", &date);
 
     if (YearLSDSelector((void*)&date, 0) != 6) {
         printf("Failed\n");
@@ -265,44 +435,14 @@ bool TestSortDateTimes()
 
     const size_t numDates = 5;
     DateTime dates[numDates];
-
-    dates[0].second = 0;
-    dates[0].minute = 0;
-    dates[0].hour = 0;
-    dates[0].month = 1;
-    dates[0].day = 1;
-    dates[0].year = 2066;
-
-    dates[1].second = 0;
-    dates[1].minute = 0;
-    dates[1].hour = 0;
-    dates[1].month = 1;
-    dates[1].day = 1;
-    dates[1].year = 2032;
-
-    dates[2].second = 0;
-    dates[2].minute = 0;
-    dates[2].hour = 0;
-    dates[2].month = 1;
-    dates[2].day = 1;
-    dates[2].year = 2180;
-
-    dates[3].second = 0;
-    dates[3].minute = 0;
-    dates[3].hour = 0;
-    dates[3].month = 1;
-    dates[3].day = 1;
-    dates[3].year = 1432;
-
-    dates[4].second = 0;
-    dates[4].minute = 0;
-    dates[4].hour = 0;
-    dates[4].month = 1;
-    dates[4].day = 1;
-    dates[4].year = 1970;
-
     size_t sortedKeys[numDates] = { 0 };
 
+    PopulateDateTimeFromIsoString("2066-00-00T00:00:00", &dates[0]);
+    PopulateDateTimeFromIsoString("2032-00-00T00:00:00", &dates[1]);
+    PopulateDateTimeFromIsoString("2180-00-00T00:00:00", &dates[2]);
+    PopulateDateTimeFromIsoString("1432-00-00T00:00:00", &dates[3]);
+    PopulateDateTimeFromIsoString("1970-00-00T00:00:00", &dates[4]);
+    
     if (!SortDateTimes(dates, numDates, sortedKeys)) {
         printf("Failed\n");
         return false;
@@ -327,6 +467,7 @@ int main()
     TestCountSort();
     TestYearSelectors();
     TestSortDateTimes();
+    printf("%s\n", TestCopyDigits() ? "Passed" : "Failed");
 
     return 0;
 }
