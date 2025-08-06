@@ -66,8 +66,6 @@ unsigned int TestValueSelector(const void* values, size_t key)
 
 bool TestCountSort()
 {
-    printf("Testing Count Sort...\n");
-
     const size_t numValues = 10;
     unsigned int values[numValues] = {2, 0, 3, 7, 6, 9, 4, 4, 3, 2};
     unsigned int expected[numValues] = {0, 2, 2, 3, 3, 4, 4, 6, 7, 9};
@@ -85,7 +83,6 @@ bool TestCountSort()
     }
 
     if (!CountSort((void*)values, TestValueSelector, 9, numValues, keys, sortedKeys)) {
-        printf("Failed\n");
         return false;
     }
 
@@ -94,12 +91,10 @@ bool TestCountSort()
         printf("%d\n", values[sortedKeys[i]]);
 
         if (values[sortedKeys[i]] != expected[i]) {
-            printf("Failed\n");
             return false;
         }
     }
 
-    printf("Passed\n");
     return true;
 }
 
@@ -112,6 +107,88 @@ typedef struct dateTime {
     unsigned int minute;    // [0, 59]
     unsigned int second;    // [0. 59]
 } DateTime;
+
+bool IsDateTimeValid(DateTime* pDateTime)
+{
+    // TODO: Implement
+    return false;
+}
+
+// Prints the given DateTime to stdout in ISO format
+void PrintDateTime(DateTime* pDateTime)
+{
+    if (pDateTime) {
+        printf("%d-%d-%dT%d:%d:%d\n",
+            pDateTime->year,
+            pDateTime->month,
+            pDateTime->day,
+            pDateTime->hour,
+            pDateTime->minute,
+            pDateTime->second);
+    }
+}
+
+bool DateTimesEqual(const DateTime* lhs, const DateTime* rhs)
+{
+    if (!lhs || !rhs) {
+        return false;
+    }
+
+    return lhs->year == rhs->year
+        && lhs->month == rhs->month
+        && lhs->day == rhs->day
+        && lhs->hour == rhs->hour
+        && lhs->minute == rhs->minute
+        && lhs->second == rhs->second;
+}
+
+// Compares two DateTimes and returns true iff the first is smaller than the second.
+//
+// Note that this function is intended for validating results during testing (i.e., not
+// for use in a comparison-based sort).
+bool DateTimeLessThan(const DateTime* lhs, const DateTime* rhs)
+{
+    if (!lhs || !rhs) {
+        return false;
+    }
+
+    if (lhs->year < rhs->year) {
+        return true;
+    }
+    else if (lhs->year > rhs->year) {
+        return false;
+    }
+
+    if (lhs->month < rhs->month) {
+        return true;
+    }
+    else if (lhs->month > rhs->month) {
+        return false;
+    }
+
+    if (lhs->day < rhs->day) {
+        return true;
+    }
+    else if (lhs->day > rhs->day) {
+        return false;
+    }
+
+    if (lhs->hour < rhs->hour) {
+        return true;
+    }
+    else if (lhs->hour > rhs->hour) {
+        return false;
+    }
+
+    if (lhs->minute < rhs->minute) {
+        return true;
+    }
+    else if (lhs->minute > rhs->minute) {
+        return false;
+    }
+
+    return (lhs->second < rhs->second);
+}
 
 bool CopyDigits(char* dst, const char* src, size_t start, size_t length, size_t* outPos)
 {
@@ -195,6 +272,13 @@ bool IntFromChars(unsigned int* dst, char* src, size_t n)
     return true;
 }
 
+bool TestIntFromChars()
+{
+    // TODO: Implement
+
+    return true;
+}
+
 bool ExpectChar(const char* src, size_t offset, char val)
 {
     return src[offset] == val;
@@ -209,6 +293,8 @@ bool PopulateDateTimeFromIsoString(const char* isoString, DateTime* dateTime)
 
     const size_t maxIsoLength = 25;
     size_t seekPos = 0;
+
+    // TODO: Enforce ranges (return false if data is outside range)
 
     char year[4];      // Four digit year
     char month[2];     // [1, 12]
@@ -334,32 +420,25 @@ unsigned int YearMilleniumSelector(const void* dateTimeValues, size_t key)
 
 bool TestYearSelectors()
 {
-    printf("Testing Year Selectors...\n");
-
     DateTime date;
     PopulateDateTimeFromIsoString("2056-00-00T00:00:00", &date);
 
     if (YearLSDSelector((void*)&date, 0) != 6) {
-        printf("Failed\n");
         return false;
     }
 
     if (YearDecadeSelector((void*)&date, 0) != 5) {
-        printf("Failed\n");
         return false;
     }
 
     if (YearCenturySelector((void*)&date, 0) != 0) {
-        printf("Failed\n");
         return false;
     }
 
     if (YearMilleniumSelector((void*)&date, 0) != 2) {
-        printf("Failed\n");
         return false;
     }
 
-    printf("Passed\n");
     return true;
 }
 
@@ -431,43 +510,53 @@ bool SortDateTimes(const DateTime* dateTimes, size_t count, size_t* outKeys)
 
 bool TestSortDateTimes()
 {
-    printf("Testing Sort DateTime...\n");
-
-    const size_t numDates = 5;
+    const size_t numDates = 12;
     DateTime dates[numDates];
     size_t sortedKeys[numDates] = { 0 };
 
-    PopulateDateTimeFromIsoString("2066-00-00T00:00:00", &dates[0]);
-    PopulateDateTimeFromIsoString("2032-00-00T00:00:00", &dates[1]);
-    PopulateDateTimeFromIsoString("2180-00-00T00:00:00", &dates[2]);
-    PopulateDateTimeFromIsoString("1432-00-00T00:00:00", &dates[3]);
-    PopulateDateTimeFromIsoString("1970-00-00T00:00:00", &dates[4]);
+    PopulateDateTimeFromIsoString("0000-01-01T00:01:01", &dates[0]);
+    PopulateDateTimeFromIsoString("0000-01-02T01:01:01", &dates[1]);
+    PopulateDateTimeFromIsoString("0001-02-02T01:00:00", &dates[2]);
+    PopulateDateTimeFromIsoString("0001-02-02T00:00:00", &dates[3]);
+    PopulateDateTimeFromIsoString("0000-02-02T01:01:01", &dates[4]);
+    PopulateDateTimeFromIsoString("0000-01-01T00:00:01", &dates[5]);
+    PopulateDateTimeFromIsoString("0000-01-01T00:00:00", &dates[6]);
+    PopulateDateTimeFromIsoString("0000-01-01T01:01:01", &dates[7]);
+    PopulateDateTimeFromIsoString("0001-02-01T00:00:00", &dates[8]);
+    PopulateDateTimeFromIsoString("0001-02-02T01:01:01", &dates[9]);
+    PopulateDateTimeFromIsoString("0001-02-02T01:01:00", &dates[10]);
+    PopulateDateTimeFromIsoString("0001-01-01T00:00:00", &dates[11]);
     
     if (!SortDateTimes(dates, numDates, sortedKeys)) {
-        printf("Failed\n");
         return false;
     }
 
     printf("Sorted Dates:\n");
     for (int i = 0; i < numDates; i++) {
-        printf("%d\n", dates[sortedKeys[i]].year);
+        DateTime* pCurDate = &dates[sortedKeys[i]];
+        PrintDateTime(pCurDate);
 
-        if (i > 0 && dates[sortedKeys[i]].year < dates[sortedKeys[i - 1]].year) {
-            printf("Failed\n");
-            return false;
+        if (i > 0) {
+            DateTime* pPrevDate = &dates[sortedKeys[i-1]];
+            if (DateTimeLessThan(pCurDate, pPrevDate)) {
+                return false;
+            }
         }
     }
 
-    printf("Passed\n");
     return true;
 }
 
+#define TEST(t) \
+    printf("===Running Test %s===\n", #t); \
+    printf("%s\n\n", t() ? "Passed" : "Failed") ;
+
 int main()
 {
-    TestCountSort();
-    TestYearSelectors();
-    TestSortDateTimes();
-    printf("%s\n", TestCopyDigits() ? "Passed" : "Failed");
+    TEST(TestCountSort);
+    TEST(TestYearSelectors);
+    TEST(TestSortDateTimes);
+    TEST(TestCopyDigits);
 
     return 0;
 }
