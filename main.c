@@ -99,19 +99,29 @@ bool TestCountSort()
 }
 
 
+
 typedef struct dateTime {
     unsigned int year;      // Four digit year
     unsigned int month;     // [1, 12]
     unsigned int day;       // [1, 31]
     unsigned int hour;      // [0, 23]
     unsigned int minute;    // [0, 59]
-    unsigned int second;    // [0. 59]
+    unsigned int second;    // [0, 59]
 } DateTime;
 
-bool IsDateTimeValid(DateTime* pDateTime)
+bool InRange(unsigned int value, unsigned int min, unsigned int max)
 {
-    // TODO: Implement
-    return false;
+    return value >= min && value <= max;
+}
+
+bool IsDateTimeValid(DateTime* dateTime)
+{
+    return InRange(dateTime->year, 0, 9999)
+        && InRange(dateTime->month, 1, 12)
+        && InRange(dateTime->day, 1, 31)
+        && InRange(dateTime->hour, 0, 23)
+        && InRange(dateTime->minute, 0, 59)
+        && InRange(dateTime->second, 0, 59);
 }
 
 // Prints the given DateTime to stdout in ISO format
@@ -189,6 +199,7 @@ bool DateTimeLessThan(const DateTime* lhs, const DateTime* rhs)
 
     return (lhs->second < rhs->second);
 }
+
 
 bool CopyDigits(char* dst, const char* src, size_t start, size_t length, size_t* outPos)
 {
@@ -272,13 +283,6 @@ bool IntFromChars(unsigned int* dst, char* src, size_t n)
     return true;
 }
 
-bool TestIntFromChars()
-{
-    // TODO: Implement
-
-    return true;
-}
-
 bool ExpectChar(const char* src, size_t offset, char val)
 {
     return src[offset] == val;
@@ -293,8 +297,6 @@ bool PopulateDateTimeFromIsoString(const char* isoString, DateTime* dateTime)
 
     const size_t maxIsoLength = 25;
     size_t seekPos = 0;
-
-    // TODO: Enforce ranges (return false if data is outside range)
 
     char year[4];      // Four digit year
     char month[2];     // [1, 12]
@@ -366,7 +368,7 @@ bool PopulateDateTimeFromIsoString(const char* isoString, DateTime* dateTime)
 
     // TODO: Time zone support
 
-    return true;
+    return IsDateTimeValid(dateTime);
 }
 
 unsigned int SecondSelector(const void* dateTimeValues, size_t key)
@@ -445,6 +447,10 @@ bool TestYearSelectors()
 
 bool SortDateTimes(const DateTime* dateTimes, size_t count, size_t* outKeys)
 {
+    if (!outKeys) {
+        return false;
+    }
+
     // Initialize key array that we'll be sorting
     size_t* keys = calloc(count, sizeof(size_t));  // calloc should initialize memory to 0
     for (size_t i = 0; i < count; i++) {
@@ -532,13 +538,88 @@ bool TestSortDateTimes()
     }
 
     printf("Sorted Dates:\n");
-    for (int i = 0; i < numDates; i++) {
+    for (size_t i = 0; i < numDates; i++) {
         DateTime* pCurDate = &dates[sortedKeys[i]];
         PrintDateTime(pCurDate);
 
         if (i > 0) {
             DateTime* pPrevDate = &dates[sortedKeys[i-1]];
             if (DateTimeLessThan(pCurDate, pPrevDate)) {
+                return false;
+            }
+        }
+    }
+
+    return true;
+}
+
+bool DistinctDateTimes(const DateTime* dateTimes, size_t count, size_t* outKeys, size_t* outNewCount)
+{
+    if (!outKeys || !outNewCount) {
+        return false;
+    }
+
+    // First sort the list of dates
+    size_t* sortedKeys = calloc(count, sizeof(size_t));  // calloc should initialize memory to 0
+    bool success = SortDateTimes(dateTimes, count, sortedKeys);
+
+    size_t newCount = 0;
+    if (success) {
+        for (size_t i = 0; i < count; i++) {
+            // Equal dates are now contiguous; if a date equals the previous date then skip it
+            if (i > 0) {
+                const DateTime* prevDate = &dateTimes[sortedKeys[i - 1]];
+                const DateTime* curDate = &dateTimes[sortedKeys[i]];
+                if (DateTimesEqual(prevDate, curDate)) {
+                    continue;
+                }
+            }
+
+            outKeys[newCount] = sortedKeys[i];
+            newCount++;
+        }
+    }
+
+    *outNewCount = newCount;
+    free(sortedKeys);
+
+    return success;
+}
+
+bool TestDistinctDateTimes()
+{
+    const size_t numDates = 8;
+    DateTime dates[numDates];
+
+    size_t distinctKeys[numDates] = { 0 };
+    size_t numDistinctKeys = 0;
+
+    PopulateDateTimeFromIsoString("0000-01-01T00:00:00", &dates[0]);
+    PopulateDateTimeFromIsoString("0000-01-01T00:00:01", &dates[1]);
+    PopulateDateTimeFromIsoString("0000-01-01T00:01:01", &dates[2]);
+    PopulateDateTimeFromIsoString("0000-01-01T00:01:01", &dates[3]); // Copy
+    PopulateDateTimeFromIsoString("0000-01-01T00:01:01", &dates[4]); // Copy
+    PopulateDateTimeFromIsoString("0000-01-01T01:01:01", &dates[5]);
+    PopulateDateTimeFromIsoString("1000-01-01T00:00:00", &dates[6]);
+    PopulateDateTimeFromIsoString("1000-01-01T00:00:00", &dates[7]); // Copy
+
+    if (!DistinctDateTimes(dates, numDates, distinctKeys, &numDistinctKeys)) {
+        return false;
+    }
+
+    // Three dates in the test set are copies and should be removed
+    if (numDistinctKeys != 5) {
+        return false;
+    }
+
+    printf("Distinct Dates:\n");
+    for (size_t i = 0; i < numDistinctKeys; i++) {
+        DateTime* pCurDate = &dates[distinctKeys[i]];
+        PrintDateTime(pCurDate);
+
+        if (i > 0) {
+            DateTime* pPrevDate = &dates[distinctKeys[i-1]];
+            if (!DateTimeLessThan(pPrevDate, pCurDate)) {
                 return false;
             }
         }
@@ -554,9 +635,10 @@ bool TestSortDateTimes()
 int main()
 {
     TEST(TestCountSort);
+    TEST(TestCopyDigits);
     TEST(TestYearSelectors);
     TEST(TestSortDateTimes);
-    TEST(TestCopyDigits);
+    TEST(TestDistinctDateTimes);
 
     return 0;
 }
