@@ -1,3 +1,4 @@
+#include <ctype.h>
 #include <stdbool.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -379,12 +380,121 @@ bool PopulateDateTimeFromIsoString(const char* isoString, DateTime* dateTime)
     }
     IntFromChars(&(dateTime->second), second, 2);
 
-    // TODO: implement full time zone support by switching on next character ('Z', '+' or '-')
-    if (!ExpectChar(isoString, seekPos++, 'Z')) {
+    // Read time zone
+    char tzd = isoString[seekPos++];
+
+    if (tzd == '+' || tzd == '-') {
+        unsigned int tzHourOffset = 0;
+        unsigned int tzMinuteOffset = 0;
+        char tzdHour[2];      // [0, 23]
+        char tzdMinute[2];    // [0, 59]
+
+        // Read hour
+        if (!CopyDigits(tzdHour, isoString, seekPos, 2, &seekPos)) {
+            return false;
+        }
+
+        if (!IntFromChars(&tzHourOffset, tzdHour, 2) || !InRange(tzHourOffset, 0, 23)) {
+            return false;
+        }
+
+        // Consume ':'
+        if (!ExpectChar(isoString, seekPos++, ':')) {
+            return false;
+        }
+
+        // Read minute
+        if (!CopyDigits(tzdMinute, isoString, seekPos, 2, &seekPos)) {
+            return false;
+        }
+
+        if (!IntFromChars(&tzMinuteOffset, tzdMinute, 2) || !InRange(tzMinuteOffset, 0, 59)) {
+            return false;
+        }
+
+        if (tzd == '+') {
+            dateTime->hour += tzHourOffset;
+            dateTime->minute += tzMinuteOffset;
+        }
+        else {
+            dateTime->hour -= tzHourOffset;
+            dateTime->minute -= tzMinuteOffset;
+        }
+    }
+    else if (tzd != 'Z') { // 'Z' denotes GMT
+        return false;
+    }
+
+    // Consume trailing whitespace
+    while (isspace(isoString[seekPos])) {
+        seekPos++;
+    }
+
+    // Expect end of string
+    if (!ExpectChar(isoString, seekPos++, '\0')) {
         return false;
     }
 
     return IsDateTimeValid(dateTime);
+}
+
+bool TestPopulateDateTimeFromIsoString()
+{
+    DateTime date;
+    DateTime expected;
+
+    expected.year = 2085;
+    expected.month = 9;
+    expected.day = 28;
+    expected.hour = 20;
+    expected.minute = 33;
+    expected.second = 29;
+
+    bool success = false;
+
+    // Empty string
+    success = PopulateDateTimeFromIsoString("", &date);
+    if (success != false) {
+        return false;
+    }
+
+    // Not a date
+    success = PopulateDateTimeFromIsoString("Hello, world!", &date);
+    if (success != false) {
+        return false;
+    }
+
+    // Partial date
+    success = PopulateDateTimeFromIsoString("2085-09-28", &date);
+    if (success != false) {
+        return false;
+    }
+
+    // Missing TZD
+    success = PopulateDateTimeFromIsoString("2085-09-28T20:33:29", &date);
+    if (success != false) {
+        return false;
+    }
+
+    // GMT
+    success = PopulateDateTimeFromIsoString("2085-09-28T20:33:29Z", &date);
+    if (success == false || !DateTimesEqual(&date, &expected)) {
+        return false;
+    }
+
+    // Positive TZD
+    success = PopulateDateTimeFromIsoString("2085-09-28T08:03:29+12:30", &date);
+    if (success == false || !DateTimesEqual(&date, &expected)) {
+        return false;
+    }
+
+    // Negative TZD
+    success = PopulateDateTimeFromIsoString("2085-09-28T22:53:29-02:20", &date);
+    if (success == false || !DateTimesEqual(&date, &expected)) {
+        return false;
+    }
+
+    return true;
 }
 
 unsigned int SecondSelector(const void* dateTimeValues, size_t key)
@@ -710,6 +820,7 @@ int main()
 {
     TEST(TestCountSort);
     TEST(TestCopyDigits);
+    TEST(TestPopulateDateTimeFromIsoString);
     TEST(TestYearSelectors);
     TEST(TestSortDateTimes);
     TEST(TestDistinctDateTimes);
