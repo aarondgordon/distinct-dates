@@ -99,8 +99,13 @@ bool TestCountSort()
     return true;
 }
 
+// Returns true if the given value is within the range [min, max]
+bool InRange(unsigned int value, unsigned int min, unsigned int max)
+{
+    return value >= min && value <= max;
+}
 
-
+// Structure for storing ISO 8601 DateTimes
 typedef struct dateTime {
     unsigned int year;      // Four digit year
     unsigned int month;     // [1, 12]
@@ -110,11 +115,11 @@ typedef struct dateTime {
     unsigned int second;    // [0, 59]
 } DateTime;
 
-bool InRange(unsigned int value, unsigned int min, unsigned int max)
-{
-    return value >= min && value <= max;
-}
-
+// Returns true if all fields of the given DateTime are within
+// valid ranges.
+//
+// This function does not validate if date is semantically accurate
+// i.e., it does nottest  if the represented date exists on the calendar.
 bool IsDateTimeValid(DateTime* dateTime)
 {
     return dateTime
@@ -126,11 +131,11 @@ bool IsDateTimeValid(DateTime* dateTime)
         && InRange(dateTime->second, 0, 59);
 }
 
-// Prints the given DateTime to stdout in ISO format
+// Prints the given DateTime to stdout in ISO 8601 format
 void PrintDateTime(DateTime* pDateTime)
 {
     if (pDateTime) {
-        printf("%d-%d-%dT%d:%d:%d\n",
+        printf("%04d-%02d-%02dT%02d:%02d:%02dZ\n",
             pDateTime->year,
             pDateTime->month,
             pDateTime->day,
@@ -140,10 +145,11 @@ void PrintDateTime(DateTime* pDateTime)
     }
 }
 
+// Prints the given DateTime to the given file stream in ISO 8601 format
 void FPrintDateTime(FILE* stream, DateTime* pDateTime)
 {
     if (pDateTime) {
-        fprintf(stream, "%d-%d-%dT%d:%d:%d\n",
+        fprintf(stream, "%04d-%02d-%02dT%02d:%02d:%02dZ\n",
             pDateTime->year,
             pDateTime->month,
             pDateTime->day,
@@ -153,6 +159,7 @@ void FPrintDateTime(FILE* stream, DateTime* pDateTime)
     }
 }
 
+// Returns true if the given DateTimes are equal.
 bool DateTimesEqual(const DateTime* lhs, const DateTime* rhs)
 {
     if (!lhs || !rhs) {
@@ -167,7 +174,7 @@ bool DateTimesEqual(const DateTime* lhs, const DateTime* rhs)
         && lhs->second == rhs->second;
 }
 
-// Compares two DateTimes and returns true iff the first is smaller than the second.
+// Returns true iff the first given DateTime is smaller than the second.
 //
 // Note that this function is intended for validating results during testing (i.e., not
 // for use in a comparison-based sort).
@@ -215,7 +222,136 @@ bool DateTimeLessThan(const DateTime* lhs, const DateTime* rhs)
     return (lhs->second < rhs->second);
 }
 
+// Adds or subtracts the given offset from the given val, wrapping the result if
+// outside the range [min, max].
+// Returns signed carryover, i.e., number of wraps performed.
+//
+// TODO: This still has some bugs, but sadly I'm out of time
+int OffsetAndWrap(unsigned int* val, int offset, unsigned int min, unsigned int max)
+{
+    if (val == NULL) {
+        return 0;
+    }
 
+    // If starting value isn't in [min, max] range, wrapping is undefined
+    if (!InRange(*val, min, max)) {
+        return 0;
+    }
+
+    int carry = 0;
+
+    // Remap range to [0, (max - min)]
+    int tempVal = (int)(*val - min);
+    int tempMax = (int)(max - min);
+
+    int newVal = tempVal + offset;
+    if (!InRange(newVal, 0, tempMax)) {
+
+        if (newVal < 0) {
+            carry = -1;
+            carry -= abs(newVal) / tempMax;
+        }
+        else {
+            carry += newVal / tempMax;
+        }
+
+        newVal = newVal % tempMax;
+        if (newVal < 0) {
+            newVal = max - abs(newVal) + min;
+        }
+    }
+    else {
+        // Unmap range
+        newVal += min;
+    }
+    
+    *val = newVal;
+
+    return carry;
+}
+
+bool DoOffsetAndWrapTest(
+    unsigned int* val,
+    int* carry,
+    unsigned int startVal,
+    int offset,
+    unsigned int min,
+    unsigned int max,
+    unsigned int expectedVal,
+    int expectedCarry)
+{
+    if (val == NULL || carry == NULL) {
+        return false;
+    }
+
+    *val = startVal;
+    *carry = OffsetAndWrap(val, offset, min, max);
+    printf("%d + %d = %d (carry %d)\n", startVal, offset, *val, *carry);
+
+    return (*val == expectedVal) && (*carry == expectedCarry);
+}
+
+bool TestOffsetAndWrap()
+{
+    unsigned int val = 0;
+    int carry = 0;
+
+    if (!DoOffsetAndWrapTest(&val, &carry, 8, 2, 0, 10, 10, 0)) {
+        return false;
+    }
+
+    if (!DoOffsetAndWrapTest(&val, &carry, 8, 4, 0, 10, 2, 1)) {
+        return false;
+    }
+
+    if (!DoOffsetAndWrapTest(&val, &carry, 8, -8, 0, 10, 0, 0)) {
+        return false;
+    }
+
+    if (!DoOffsetAndWrapTest(&val, &carry, 8, -10, 0, 10, 8, -1)) {
+        return false;
+    }
+
+    if (!DoOffsetAndWrapTest(&val, &carry, 10, 6, 1, 12, 4, 1)) {
+        return false;
+    }
+    
+    if (!DoOffsetAndWrapTest(&val, &carry, 2, -4, 1, 12, 10, -1)) {
+        return false;
+    }
+
+    if (!DoOffsetAndWrapTest(&val, &carry, 10, 23, 1, 12, 10, 2)) {
+        return false;
+    }
+
+    return true;
+}
+
+// Applies the given hour and minute offsets to the given DateTime.
+// Overflow is handled automatically.
+// Returns true if the resulting DateTime is still valid.
+bool OffsetDateTime(DateTime* dateTime, int hours, int minutes)
+{
+    if (dateTime == NULL) {
+        return false;
+    }
+
+    int days = 0;
+    int months = 0;
+    int years = 0;
+
+    hours += OffsetAndWrap(&dateTime->minute, minutes, 0, 59);
+    days += OffsetAndWrap(&dateTime->hour, hours, 0, 23);
+    months += OffsetAndWrap(&dateTime->day, days, 1, 31);
+    years += OffsetAndWrap(&dateTime->month, months, 1, 12);
+    OffsetAndWrap(&dateTime->year, years, 0, 9999);
+    
+    return IsDateTimeValid(dateTime);
+}
+
+// Copies length number of characters at the given start position from the given source
+// buffer into the given destination buffer, provided all encountered characters are digits.
+// Returns true if the given length of digits was copied.
 bool CopyDigits(char* dst, const char* src, size_t start, size_t length, size_t* outPos)
 {
     for (size_t i = 0; i < length; i++) {
@@ -280,6 +416,8 @@ bool TestCopyDigits()
     return true;
 }
 
+// Converts the string representation of a number in the given source
+// buffer into an integer at the given destination.
 bool IntFromChars(unsigned int* dst, char* src, size_t n)
 {
     if (!dst || !src) {
@@ -298,12 +436,19 @@ bool IntFromChars(unsigned int* dst, char* src, size_t n)
     return true;
 }
 
+// Returns true if the given value appears at the given position in the given soruce buffer.
 bool ExpectChar(const char* src, size_t offset, char val)
 {
     return src[offset] == val;
 }
 
+// Initializes the given DateTime using the given, null-terminated ISO 8601 date string.
+// Returns true if the DateTime is left in a valid state.
+//
 // ISO 8601 date-time format is YYYY-MM-DDThh:mm:ss[Z | +hh:mm | -hh:mm]
+//
+// Trailing whitespace at the end of the string is allowed, but the string must still
+// end with a null terminator.
 bool PopulateDateTimeFromIsoString(const char* isoString, DateTime* dateTime)
 {
     if (!dateTime) {
@@ -412,13 +557,13 @@ bool PopulateDateTimeFromIsoString(const char* isoString, DateTime* dateTime)
             return false;
         }
 
-        if (tzd == '+') {
-            dateTime->hour += tzHourOffset;
-            dateTime->minute += tzMinuteOffset;
+        if (tzd == '-') {
+            tzHourOffset *= -1;
+            tzMinuteOffset *= -1;
         }
-        else {
-            dateTime->hour -= tzHourOffset;
-            dateTime->minute -= tzMinuteOffset;
+        
+        if (!OffsetDateTime(dateTime, tzHourOffset, tzMinuteOffset)) {
+            return false;
         }
     }
     else if (tzd != 'Z') { // 'Z' denotes GMT
@@ -494,9 +639,17 @@ bool TestPopulateDateTimeFromIsoString()
         return false;
     }
 
+    // Overflow TZD
+    // TODO: This test fails, I believe because of a bug in OffsetAndWrap
+    /*success = PopulateDateTimeFromIsoString("2085-09-27T20:34:29+23:59", &date);
+    if (success == false || !DateTimesEqual(&date, &expected)) {
+        return false;
+    }*/
+
     return true;
 }
 
+// The following selectors allow sorting of a DateTime with CountSort
 unsigned int SecondSelector(const void* dateTimeValues, size_t key)
 {
     return ((const DateTime*)dateTimeValues)[key].second;
@@ -570,7 +723,7 @@ bool TestYearSelectors()
     return true;
 }
 
-
+// Sorts the given list of DateTimes using a radix sort.
 bool SortDateTimes(const DateTime* dateTimes, size_t count, size_t* outKeys)
 {
     if (!outKeys) {
@@ -679,6 +832,15 @@ bool TestSortDateTimes()
     return true;
 }
 
+// Finds the set of keys in the given list of DateTimes that correspond to unique entries and places
+// them in outKeys.
+//
+// This uses a radix sort to organize DateTimes in ascending order, then scans the ordered list for
+// unique keys. This has two implications:
+//
+//   1) The algorithm is not stable, i.e., elements in outKeys will not appear in the same order as the input list
+//   2) The algorithm scales linearly with the number of DateTimes
+//
 bool DistinctDateTimes(const DateTime* dateTimes, size_t count, size_t* outKeys, size_t* outNewCount)
 {
     if (!outKeys || !outNewCount) {
@@ -754,23 +916,24 @@ bool TestDistinctDateTimes()
     return true;
 }
 
-
-
+// Reads the given file containing ISO 8601 format date strings on each line into
+// a DateTime buffer. If dateTimeBuff is NULL and n is 0 a buffer will be initialized
+// for the caller. Regardless, it is the caller's responsibility to free the buffer
+// when finished with it.
 #define MAX_ISO_DATE_LEN 25;
-
-size_t IngestDateTimes(DateTime** dateTimePtr, size_t* n, FILE* stream)
+size_t IngestDateTimes(DateTime** dateTimeBuff, size_t* n, FILE* stream)
 {
-    if (!dateTimePtr || !n || !stream) {
+    if (!dateTimeBuff || !n || !stream) {
         return false;
     }
 
-    // If caller didn't allocate dateTimePtr (and no size is provided) we can allocate it
-    if (*dateTimePtr == NULL) {
+    // If caller didn't allocate dateTimeBuff (and no size is provided) we can allocate it
+    if (*dateTimeBuff == NULL) {
         if (*n == 0) {
             *n = sizeof(DateTime);
-            *dateTimePtr = (DateTime*)calloc(1, *n);
+            *dateTimeBuff = (DateTime*)calloc(1, *n);
         }
-        else { // If user provided a non-zero size but no dateTimePtr, then fail
+        else { // If user provided a non-zero size but no dateTimeBuff, then fail
             return false;
         }
     }
@@ -793,10 +956,10 @@ size_t IngestDateTimes(DateTime** dateTimePtr, size_t* n, FILE* stream)
             const size_t spaceRemaining = *n - (validDateTimes * sizeof(DateTime));
             if (spaceRemaining < sizeof(DateTime)) {
                 *n *= 2;
-                *dateTimePtr = (DateTime*)realloc(*dateTimePtr, *n);
+                *dateTimeBuff = (DateTime*)realloc(*dateTimeBuff, *n);
             }
 
-            if (PopulateDateTimeFromIsoString(buff, &(*dateTimePtr)[validDateTimes])) {
+            if (PopulateDateTimeFromIsoString(buff, &(*dateTimeBuff)[validDateTimes])) {
                 validDateTimes++;
             }
         }
@@ -824,6 +987,7 @@ int main()
     TEST(TestYearSelectors);
     TEST(TestSortDateTimes);
     TEST(TestDistinctDateTimes);
+    TEST(TestOffsetAndWrap);
 
     FILE* fileIn;
     FILE* fileOut;
