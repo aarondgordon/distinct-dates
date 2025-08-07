@@ -139,6 +139,19 @@ void PrintDateTime(DateTime* pDateTime)
     }
 }
 
+void FPrintDateTime(FILE* stream, DateTime* pDateTime)
+{
+    if (pDateTime) {
+        fprintf(stream, "%d-%d-%dT%d:%d:%d\n",
+            pDateTime->year,
+            pDateTime->month,
+            pDateTime->day,
+            pDateTime->hour,
+            pDateTime->minute,
+            pDateTime->second);
+    }
+}
+
 bool DateTimesEqual(const DateTime* lhs, const DateTime* rhs)
 {
     if (!lhs || !rhs) {
@@ -628,6 +641,64 @@ bool TestDistinctDateTimes()
     return true;
 }
 
+
+
+#define MAX_ISO_DATE_LEN 25;
+
+size_t IngestDateTimes(DateTime** dateTimePtr, size_t* n, FILE* stream)
+{
+    if (!dateTimePtr || !n || !stream) {
+        return false;
+    }
+
+    // If caller didn't allocate dateTimePtr (and no size is provided) we can allocate it
+    if (*dateTimePtr == NULL) {
+        if (*n == 0) {
+            *n = sizeof(DateTime);
+            *dateTimePtr = (DateTime*)calloc(1, *n);
+        }
+        else { // If user provided a non-zero size but no dateTimePtr, then fail
+            return false;
+        }
+    }
+    
+    char* buff;
+    size_t buffSize = MAX_ISO_DATE_LEN;
+
+    buff = (char*)malloc(buffSize * sizeof(char));
+    if (buff == NULL) {
+        return false;
+    }
+
+    size_t chars = 0;
+    size_t validDateTimes = 0;
+
+    while (!feof(stream)) {
+        chars = getline(&buff, &buffSize, stream);
+        if (chars > 0) {
+            // If we're out of space, allocate more
+            const size_t spaceRemaining = *n - (validDateTimes * sizeof(DateTime));
+            if (spaceRemaining < sizeof(DateTime)) {
+                *n *= 2;
+                *dateTimePtr = (DateTime*)realloc(*dateTimePtr, *n);
+            }
+
+            if (PopulateDateTimeFromIsoString(buff, &(*dateTimePtr)[validDateTimes])) {
+                validDateTimes++;
+            }
+        }
+        else {
+            validDateTimes = chars;
+            break;
+        }
+    }
+
+    free(buff);
+
+    return validDateTimes;
+}
+
+
 #define TEST(t) \
     printf("===Running Test %s===\n", #t); \
     printf("%s\n\n", t() ? "Passed" : "Failed") ;
@@ -639,6 +710,40 @@ int main()
     TEST(TestYearSelectors);
     TEST(TestSortDateTimes);
     TEST(TestDistinctDateTimes);
+
+    FILE* fptr;
+    fptr = fopen("dates.txt", "r");
+
+    if (fptr == NULL) {
+        return -1;
+    }
+
+    DateTime* datesBuffer = NULL;
+    size_t datesBufferSize = 0;
+    size_t numDates = 0;
+
+    numDates = IngestDateTimes(&datesBuffer, &datesBufferSize, fptr);
+
+    if (numDates > 0) {
+        size_t* distinctKeys;
+        size_t numDistinctKeys;
+
+        distinctKeys = (size_t*)malloc(numDates * sizeof(size_t));
+        if (distinctKeys == NULL) {
+            return -1;
+        }
+
+        if (DistinctDateTimes(datesBuffer, numDates, distinctKeys, &numDistinctKeys)) {
+            for (size_t i = 0; i < numDistinctKeys; i++) {
+                PrintDateTime(&datesBuffer[distinctKeys[i]]);
+            }
+        }
+
+        free(distinctKeys);
+    }
+
+    free(datesBuffer);
+    fclose(fptr);
 
     return 0;
 }
