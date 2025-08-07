@@ -116,7 +116,8 @@ bool InRange(unsigned int value, unsigned int min, unsigned int max)
 
 bool IsDateTimeValid(DateTime* dateTime)
 {
-    return InRange(dateTime->year, 0, 9999)
+    return dateTime
+        && InRange(dateTime->year, 0, 9999)
         && InRange(dateTime->month, 1, 12)
         && InRange(dateTime->day, 1, 31)
         && InRange(dateTime->hour, 0, 23)
@@ -274,7 +275,7 @@ bool IntFromChars(unsigned int* dst, char* src, size_t n)
     *dst = 0;
 
     for (size_t i = 0; i < n; i++) {
-        if (src[i] == '\0' || src[i] < '0' || src['i'] > '9') {
+        if (src[i] == '\0' || src[i] < '0' || src[i] > '9') {
             return false;
         }
         *dst = *dst * 10 + (src[i] - '0');  // C specification guarantees 0-9 are represented by contiguous values
@@ -295,7 +296,6 @@ bool PopulateDateTimeFromIsoString(const char* isoString, DateTime* dateTime)
         return false;
     }
 
-    const size_t maxIsoLength = 25;
     size_t seekPos = 0;
 
     char year[4];      // Four digit year
