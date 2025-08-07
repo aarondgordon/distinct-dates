@@ -302,7 +302,7 @@ bool ExpectChar(const char* src, size_t offset, char val)
     return src[offset] == val;
 }
 
-// ISO 8601 date-time format is YYYY-MM-DDThh:mm:ssTZD
+// ISO 8601 date-time format is YYYY-MM-DDThh:mm:ss[Z | +hh:mm | -hh:mm]
 bool PopulateDateTimeFromIsoString(const char* isoString, DateTime* dateTime)
 {
     if (!dateTime) {
