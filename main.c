@@ -225,8 +225,6 @@ bool DateTimeLessThan(const DateTime* lhs, const DateTime* rhs)
 // Adds or subtracts the given offset from the given val, wrapping the result if
 // outside the range [min, max].
 // Returns signed carryover, i.e., number of wraps performed.
-//
-// TODO: This still has some bugs, but sadly I'm out of time
 int OffsetAndWrap(unsigned int* val, int offset, unsigned int min, unsigned int max)
 {
     if (val == NULL) {
@@ -249,21 +247,20 @@ int OffsetAndWrap(unsigned int* val, int offset, unsigned int min, unsigned int 
 
         if (newVal < 0) {
             carry = -1;
-            carry -= abs(newVal) / tempMax;
+            carry -= abs(newVal) / (tempMax + 1);
         }
         else {
-            carry += newVal / tempMax;
+            carry += newVal / (tempMax + 1);
         }
 
-        newVal = newVal % tempMax;
+        newVal = newVal % (tempMax + 1);
         if (newVal < 0) {
-            newVal = max - abs(newVal) + min;
+            newVal = (tempMax + 1) - abs(newVal);
         }
     }
-    else {
-        // Unmap range
-        newVal += min;
-    }
+    
+    // Unmap range
+    newVal += min;
     
     *val = newVal;
 
@@ -296,19 +293,19 @@ bool TestOffsetAndWrap()
     unsigned int val = 0;
     int carry = 0;
 
-    if (!DoOffsetAndWrapTest(&val, &carry, 8, 2, 0, 10, 10, 0)) {
+    if (!DoOffsetAndWrapTest(&val, &carry, 8, 1, 0, 9, 9, 0)) {
         return false;
     }
 
-    if (!DoOffsetAndWrapTest(&val, &carry, 8, 4, 0, 10, 2, 1)) {
+    if (!DoOffsetAndWrapTest(&val, &carry, 8, 4, 0, 9, 2, 1)) {
         return false;
     }
 
-    if (!DoOffsetAndWrapTest(&val, &carry, 8, -8, 0, 10, 0, 0)) {
+    if (!DoOffsetAndWrapTest(&val, &carry, 8, -8, 0, 9, 0, 0)) {
         return false;
     }
 
-    if (!DoOffsetAndWrapTest(&val, &carry, 8, -10, 0, 10, 8, -1)) {
+    if (!DoOffsetAndWrapTest(&val, &carry, 8, -10, 0, 9, 8, -1)) {
         return false;
     }
 
@@ -320,7 +317,7 @@ bool TestOffsetAndWrap()
         return false;
     }
 
-    if (!DoOffsetAndWrapTest(&val, &carry, 10, 23, 1, 12, 10, 2)) {
+    if (!DoOffsetAndWrapTest(&val, &carry, 10, 24, 1, 12, 10, 2)) {
         return false;
     }
 
@@ -640,11 +637,10 @@ bool TestPopulateDateTimeFromIsoString()
     }
 
     // Overflow TZD
-    // TODO: This test fails, I believe because of a bug in OffsetAndWrap
-    /*success = PopulateDateTimeFromIsoString("2085-09-27T20:34:29+23:59", &date);
+    success = PopulateDateTimeFromIsoString("2085-09-27T20:34:29+23:59", &date);
     if (success == false || !DateTimesEqual(&date, &expected)) {
         return false;
-    }*/
+    }
 
     return true;
 }
