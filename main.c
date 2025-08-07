@@ -379,7 +379,10 @@ bool PopulateDateTimeFromIsoString(const char* isoString, DateTime* dateTime)
     }
     IntFromChars(&(dateTime->second), second, 2);
 
-    // TODO: Time zone support
+    // TODO: implement full time zone support by switching on next character ('Z', '+' or '-')
+    if (!ExpectChar(isoString, seekPos++, 'Z')) {
+        return false;
+    }
 
     return IsDateTimeValid(dateTime);
 }
@@ -711,10 +714,12 @@ int main()
     TEST(TestSortDateTimes);
     TEST(TestDistinctDateTimes);
 
-    FILE* fptr;
-    fptr = fopen("dates.txt", "r");
+    FILE* fileIn;
+    FILE* fileOut;
+    fileIn = fopen("dates.txt", "r");
+    fileOut = fopen("distinct-dates.txt", "w");
 
-    if (fptr == NULL) {
+    if (fileIn == NULL || fileOut == NULL) {
         return -1;
     }
 
@@ -722,7 +727,7 @@ int main()
     size_t datesBufferSize = 0;
     size_t numDates = 0;
 
-    numDates = IngestDateTimes(&datesBuffer, &datesBufferSize, fptr);
+    numDates = IngestDateTimes(&datesBuffer, &datesBufferSize, fileIn);
 
     if (numDates > 0) {
         size_t* distinctKeys;
@@ -735,7 +740,7 @@ int main()
 
         if (DistinctDateTimes(datesBuffer, numDates, distinctKeys, &numDistinctKeys)) {
             for (size_t i = 0; i < numDistinctKeys; i++) {
-                PrintDateTime(&datesBuffer[distinctKeys[i]]);
+                FPrintDateTime(fileOut, &datesBuffer[distinctKeys[i]]);
             }
         }
 
@@ -743,7 +748,9 @@ int main()
     }
 
     free(datesBuffer);
-    fclose(fptr);
+    
+    fclose(fileOut);
+    fclose(fileIn);
 
     return 0;
 }
